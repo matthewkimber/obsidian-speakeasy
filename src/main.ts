@@ -3,12 +3,15 @@ import { DEFAULT_SETTINGS, SpeakeasySettingTab, type SpeakeasySettings } from ".
 import { registerCommands } from "./commands/index";
 import { AudioRecorder } from "./audio/recorder";
 import { StatusIndicator } from "./ui/status";
+import type { ParsedTemplate } from "./types";
 
 export default class SpeakeasyPlugin extends Plugin {
 	settings!: SpeakeasySettings;
 	recorder!: AudioRecorder;
 	statusIndicator: StatusIndicator | null = null;
 	ribbonIcon: HTMLElement | null = null;
+	activeTemplate: ParsedTemplate | null = null;
+	activeTitle = "";
 
 	async onload(): Promise<void> {
 		await this.loadSettings();

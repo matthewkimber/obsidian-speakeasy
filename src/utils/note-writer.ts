@@ -1,6 +1,7 @@
 import { normalizePath } from "obsidian";
 import type SpeakeasyPlugin from "../main";
-import type { TranscribeResponse, TranscriptSegment } from "../types";
+import type { TranscribeResponse, TranscriptSegment, ParsedTemplate, TemplateVars } from "../types";
+import { renderTemplate } from "../templates/parser";
 
 export function formatTimestamp(seconds: number): string {
 	const total = Math.floor(seconds);
@@ -19,6 +20,13 @@ export function formatDuration(seconds: number): string {
 	if (m === 0) return `${s}s`;
 	if (s === 0) return `${m}m`;
 	return `${m}m ${s}s`;
+}
+
+export function buildTranscriptText(response: TranscribeResponse): string {
+	if (response.segments.length === 0) return "(no speech detected)";
+	const hasSpeakers = response.segments.some((s) => s.speaker.trim() !== "");
+	if (hasSpeakers) return buildSpeakerGroups(response.segments);
+	return response.segments.map((seg) => `[${formatTimestamp(seg.start)}] ${seg.text.trim()}`).join("\n");
 }
 
 export function buildTranscriptNote(response: TranscribeResponse, audioPath: string): string {
@@ -81,22 +89,20 @@ function buildSpeakerGroups(segments: TranscriptSegment[]): string {
 			groups.push({ speaker: seg.speaker || "Unknown", lines: [line] });
 		}
 	}
-	return groups
-		.map((g) => `**${g.speaker}**\n${g.lines.join("\n")}`)
-		.join("\n\n");
+	return groups.map((g) => `**${g.speaker}**\n${g.lines.join("\n")}`).join("\n\n");
 }
 
 export async function writeTranscriptNote(
 	plugin: SpeakeasyPlugin,
 	response: TranscribeResponse,
-	audioPath: string
+	audioPath: string,
+	template?: ParsedTemplate,
+	title?: string,
 ): Promise<string> {
 	const folder = normalizePath(plugin.settings.noteOutputFolder);
-	const timestamp = new Date()
-		.toISOString()
-		.replace(/[:.]/g, "-")
-		.slice(0, 19);
-	const filename = `transcript-${timestamp}.md`;
+	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+	const slug = template ? template.slug : "transcript";
+	const filename = `${slug}-${timestamp}.md`;
 	const filePath = `${folder}/${filename}`;
 
 	const exists = await plugin.app.vault.adapter.exists(folder);
@@ -104,8 +110,47 @@ export async function writeTranscriptNote(
 		await plugin.app.vault.createFolder(folder);
 	}
 
-	const content = buildTranscriptNote(response, audioPath);
-	await plugin.app.vault.create(filePath, content);
+	let content: string;
+	if (template) {
+		content = buildTemplatedNote(response, audioPath, template, title ?? "");
+	} else {
+		content = buildTranscriptNote(response, audioPath);
+	}
 
+	await plugin.app.vault.create(filePath, content);
 	return filePath;
+}
+
+function buildTemplatedNote(
+	response: TranscribeResponse,
+	audioPath: string,
+	template: ParsedTemplate,
+	title: string,
+): string {
+	const date = new Date().toISOString().slice(0, 10);
+	const duration = formatDuration(response.duration_seconds);
+	const hasSpeakers = response.segments.some((s) => s.speaker.trim() !== "");
+	const speakers = hasSpeakers ? uniqueSpeakers(response.segments).join(", ") : "";
+
+	const frontmatterLines = [
+		"---",
+		`date: ${date}`,
+		`duration: "${duration}"`,
+		`audio: "${audioPath}"`,
+	];
+	if (speakers) frontmatterLines.push(`speakers: "${speakers}"`);
+	frontmatterLines.push(`template: "${template.name}"`);
+	frontmatterLines.push("---");
+
+	const vars: TemplateVars = {
+		title: title || `Recording — ${date}`,
+		date,
+		duration,
+		speakers,
+		template_name: template.name,
+		transcript: buildTranscriptText(response),
+		audio_path: audioPath,
+	};
+
+	return frontmatterLines.join("\n") + "\n\n" + renderTemplate(template, vars);
 }

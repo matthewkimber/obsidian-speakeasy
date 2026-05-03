@@ -1,10 +1,22 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, type Plugin } from "vitest/config";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+function mdTextLoader(): Plugin {
+	return {
+		name: "md-text-loader",
+		transform(_code: string, id: string) {
+			if (!id.endsWith(".md")) return undefined;
+			return `export default ${JSON.stringify(fs.readFileSync(id, "utf8"))}`;
+		},
+	};
+}
+
 export default defineConfig({
+	plugins: [mdTextLoader()],
 	test: {
 		environment: "jsdom",
 		coverage: {
