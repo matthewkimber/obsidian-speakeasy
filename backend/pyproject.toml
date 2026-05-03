@@ -1,0 +1,26 @@
+[project]
+name = "speakeasy-backend"
+version = "0.1.0"
+description = "Local transcription and diarisation backend for the Speakeasy Obsidian plugin."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.3",
+    "openai-whisper",
+    "pyannote.audio>=3.1",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "python-multipart>=0.0.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["e2e: end-to-end tests requiring a live backend (deselect with -m 'not e2e')"]
