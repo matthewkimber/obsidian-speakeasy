@@ -5,20 +5,24 @@ export class TemplateSelectionModal extends Modal {
 	private templates: ParsedTemplate[];
 	private selected: ParsedTemplate;
 	private title = "";
+	private skipOllama = false;
 	private descEl!: HTMLElement;
-	private readonly onSubmit: (template: ParsedTemplate, title: string) => void;
+	private readonly ollamaEnabled: boolean;
+	private readonly onSubmit: (template: ParsedTemplate, title: string, skipOllama: boolean) => void;
 
 	constructor(
 		app: App,
 		templates: ParsedTemplate[],
 		defaultTemplateName: string,
-		onSubmit: (template: ParsedTemplate, title: string) => void,
+		ollamaEnabled: boolean,
+		onSubmit: (template: ParsedTemplate, title: string, skipOllama: boolean) => void,
 	) {
 		super(app);
 		this.templates = templates;
 		const first = templates[0];
 		if (!first) throw new Error("TemplateSelectionModal requires at least one template");
 		this.selected = templates.find((t) => t.name === defaultTemplateName) ?? first;
+		this.ollamaEnabled = ollamaEnabled;
 		this.onSubmit = onSubmit;
 	}
 
@@ -54,13 +58,24 @@ export class TemplateSelectionModal extends Modal {
 					}),
 			);
 
+		if (this.ollamaEnabled) {
+			new Setting(contentEl)
+				.setName("Annotate with Ollama")
+				.setDesc("Use the local LLM to fill in template sections.")
+				.addToggle((toggle) =>
+					toggle.setValue(true).onChange((value) => {
+						this.skipOllama = !value;
+					}),
+				);
+		}
+
 		new Setting(contentEl).addButton((btn) =>
 			btn
 				.setButtonText("Start recording")
 				.setCta()
 				.onClick(() => {
 					this.close();
-					this.onSubmit(this.selected, this.title.trim());
+					this.onSubmit(this.selected, this.title.trim(), this.skipOllama);
 				}),
 		);
 	}

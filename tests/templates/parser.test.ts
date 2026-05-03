@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTemplate, renderTemplate } from "../../src/templates/parser";
+import { parseTemplate, renderTemplate, extractLlmBlocks } from "../../src/templates/parser";
 import type { TemplateVars } from "../../src/types";
 
 // ---------------------------------------------------------------------------
@@ -169,5 +169,81 @@ describe("renderTemplate", () => {
 		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n[[{{audio_path}}]]`;
 		const t = parseTemplate(raw);
 		expect(renderTemplate(t, SAMPLE_VARS)).toContain("[[Recordings/rec.wav]]");
+	});
+
+	it("injects annotation from map instead of pending placeholder", () => {
+		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n{{llm:summary}}\nSummarise.\n{{/llm}}`;
+		const t = parseTemplate(raw);
+		const annotations = new Map([["summary", "This is the summary."]]);
+		const out = renderTemplate(t, SAMPLE_VARS, annotations);
+		expect(out).toContain("This is the summary.");
+		expect(out).not.toContain("_LLM annotation pending._");
+	});
+
+	it("falls back to pending placeholder for blocks not in the annotations map", () => {
+		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n{{llm:summary}}\nSummarise.\n{{/llm}}\n{{llm:actions}}\nList actions.\n{{/llm}}`;
+		const t = parseTemplate(raw);
+		const annotations = new Map([["summary", "Summary text."]]);
+		const out = renderTemplate(t, SAMPLE_VARS, annotations);
+		expect(out).toContain("Summary text.");
+		expect(out).toContain("_LLM annotation pending._");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// extractLlmBlocks
+// ---------------------------------------------------------------------------
+
+describe("extractLlmBlocks", () => {
+	it("returns empty array when template has no LLM blocks", () => {
+		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n# {{title}}\n{{transcript}}`;
+		const t = parseTemplate(raw);
+		expect(extractLlmBlocks(t.body)).toEqual([]);
+	});
+
+	it("extracts the key from a single block", () => {
+		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n{{llm:summary}}\nSummarise this.\n{{/llm}}`;
+		const t = parseTemplate(raw);
+		const blocks = extractLlmBlocks(t.body);
+		expect(blocks).toHaveLength(1);
+		expect(blocks[0]?.key).toBe("summary");
+	});
+
+	it("extracts the prompt text from a single block", () => {
+		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n{{llm:summary}}\nSummarise this.\n{{/llm}}`;
+		const t = parseTemplate(raw);
+		const blocks = extractLlmBlocks(t.body);
+		expect(blocks[0]?.prompt).toBe("Summarise this.");
+	});
+
+	it("extracts all blocks when there are multiple", () => {
+		const raw = [
+			"---", "name: T", "description: d", "version: 1.0", "---",
+			"{{llm:summary}}", "Summarise.", "{{/llm}}",
+			"{{llm:actions}}", "List actions.", "{{/llm}}",
+			"{{llm:decisions}}", "List decisions.", "{{/llm}}",
+		].join("\n");
+		const t = parseTemplate(raw);
+		const blocks = extractLlmBlocks(t.body);
+		expect(blocks).toHaveLength(3);
+		expect(blocks.map((b) => b.key)).toEqual(["summary", "actions", "decisions"]);
+	});
+
+	it("trims whitespace from the prompt", () => {
+		const raw = `---\nname: T\ndescription: d\nversion: 1.0\n---\n{{llm:summary}}\n\n  Summarise this.  \n\n{{/llm}}`;
+		const t = parseTemplate(raw);
+		const blocks = extractLlmBlocks(t.body);
+		expect(blocks[0]?.prompt).toBe("Summarise this.");
+	});
+
+	it("handles multiline prompts", () => {
+		const raw = [
+			"---", "name: T", "description: d", "version: 1.0", "---",
+			"{{llm:summary}}", "Line one.", "Line two.", "{{/llm}}",
+		].join("\n");
+		const t = parseTemplate(raw);
+		const blocks = extractLlmBlocks(t.body);
+		expect(blocks[0]?.prompt).toContain("Line one.");
+		expect(blocks[0]?.prompt).toContain("Line two.");
 	});
 });
