@@ -4,11 +4,13 @@ import os
 import glob
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="Speakeasy backend", version="0.1.0")
+from transcribe import AudioTooShortError, WhisperModelNotFoundError, run_whisper
+
+app = FastAPI(title="Speakeasy backend", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,7 +69,25 @@ async def models() -> list[str]:
 async def transcribe(
     audio: UploadFile = File(...),
     whisper_model: str = Form("base"),
-    num_speakers: int | None = Form(None),
+    num_speakers: int | None = Form(None),  # noqa: ARG001 — used in Phase 3 (Pyannote)
 ) -> TranscribeResponse:
-    # Stub — real Whisper + Pyannote implementation added in Phase 2.
-    return TranscribeResponse(duration_seconds=0.0, segments=[])
+    audio_bytes = await audio.read()
+
+    try:
+        result = run_whisper(audio_bytes, whisper_model)
+    except WhisperModelNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AudioTooShortError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    segments = [
+        TranscriptSegment(
+            start=seg["start"],
+            end=seg["end"],
+            speaker="",  # speaker diarization added in Phase 3
+            text=seg["text"],
+        )
+        for seg in result["segments"]
+    ]
+
+    return TranscribeResponse(duration_seconds=result["duration"], segments=segments)

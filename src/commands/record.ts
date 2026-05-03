@@ -1,10 +1,11 @@
 import { Notice, normalizePath } from "obsidian";
 import type SpeakeasyPlugin from "../main";
-import { AudioRecorder, MicPermissionError, NoMicrophoneError, AlreadyRecordingError } from "../audio/recorder";
+import { MicPermissionError, NoMicrophoneError, AlreadyRecordingError } from "../audio/recorder";
 import { encodeWav } from "../audio/converter";
+import { transcribeAudio, BackendUnreachableError } from "../utils/api";
+import { writeTranscriptNote } from "../utils/note-writer";
 
 const RIBBON_ICON_IDLE = "mic";
-const RIBBON_ICON_ACTIVE = "square";
 
 export function registerRecordingCommands(plugin: SpeakeasyPlugin): void {
 	plugin.addCommand({
@@ -55,14 +56,20 @@ async function stopRecording(plugin: SpeakeasyPlugin): Promise<void> {
 		const blob = await plugin.recorder.stopRecording();
 		plugin.statusIndicator?.setRecording(false);
 		plugin.ribbonIcon?.setAttribute("aria-label", "Speakeasy: start recording");
-		await saveRecording(plugin, blob);
+
+		const { wav, filePath } = await saveRecording(plugin, blob);
+		// Fire-and-forget — transcription is async and non-blocking
+		transcribeAndWrite(plugin, wav, filePath);
 	} catch (err) {
 		new Notice("Failed to stop recording. Check the console for details.");
 		console.error("[Speakeasy] stopRecording error:", err);
 	}
 }
 
-async function saveRecording(plugin: SpeakeasyPlugin, blob: Blob): Promise<void> {
+async function saveRecording(
+	plugin: SpeakeasyPlugin,
+	blob: Blob
+): Promise<{ wav: ArrayBuffer; filePath: string }> {
 	const arrayBuffer = await blob.arrayBuffer();
 	const audioContext = new AudioContext();
 	const decoded = await audioContext.decodeAudioData(arrayBuffer);
@@ -70,13 +77,40 @@ async function saveRecording(plugin: SpeakeasyPlugin, blob: Blob): Promise<void>
 
 	const wav = encodeWav(decoded);
 	const folder = normalizePath(plugin.settings.audioOutputFolder);
-	const filename = `recording-${formatTimestamp()}.wav`;
+	const filename = `recording-${isoTimestamp()}.wav`;
 	const filePath = `${folder}/${filename}`;
 
 	await ensureFolder(plugin, folder);
 	await plugin.app.vault.adapter.writeBinary(filePath, wav);
 
 	new Notice(`Recording saved: ${filePath}`);
+	return { wav, filePath };
+}
+
+async function transcribeAndWrite(
+	plugin: SpeakeasyPlugin,
+	wav: ArrayBuffer,
+	audioFilePath: string
+): Promise<void> {
+	plugin.statusIndicator?.setProcessing("⏳ Transcribing…");
+	try {
+		const response = await transcribeAudio(
+			plugin.settings.backendUrl,
+			wav,
+			plugin.settings.whisperModel
+		);
+		const notePath = await writeTranscriptNote(plugin, response, audioFilePath);
+		plugin.statusIndicator?.clear();
+		new Notice(`Transcript ready: ${notePath}`);
+	} catch (err) {
+		plugin.statusIndicator?.clear();
+		if (err instanceof BackendUnreachableError) {
+			new Notice("Backend unreachable — is the Speakeasy server running?");
+		} else {
+			new Notice(`Transcription failed: ${err instanceof Error ? err.message : String(err)}`);
+			console.error("[Speakeasy] transcribeAndWrite error:", err);
+		}
+	}
 }
 
 async function ensureFolder(plugin: SpeakeasyPlugin, folderPath: string): Promise<void> {
@@ -86,10 +120,6 @@ async function ensureFolder(plugin: SpeakeasyPlugin, folderPath: string): Promis
 	}
 }
 
-function formatTimestamp(): string {
-	const now = new Date();
-	return now
-		.toISOString()
-		.replace(/[:.]/g, "-")
-		.slice(0, 19);
+function isoTimestamp(): string {
+	return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
