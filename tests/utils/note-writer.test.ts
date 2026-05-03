@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
 	formatTimestamp,
 	formatDuration,
@@ -139,6 +139,7 @@ describe("writeTranscriptNote", () => {
 		} as unknown as import("../../src/main").default;
 
 		// vault methods are vi.fn() stubs defined in __mocks__/obsidian.ts
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		const createSpy = mockApp.vault.create as ReturnType<typeof vi.fn>;
 
 		const path = await writeTranscriptNote(mockPlugin, sampleResponse, "Recordings/rec.wav");

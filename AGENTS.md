@@ -154,16 +154,18 @@ All code changes must follow **GitHub Flow**. Never commit directly to `master`.
 
 2. **Make changes** — commit early and often on your branch. Each commit should be an isolated, complete change with a descriptive message (e.g. `add WAV encoder with RIFF header`). Push regularly so work is backed up and visible.
 
-3. **Open a pull request** — when ready for review (or earlier, as a draft), open a PR against `master`. The PR description must include:
+3. **Pass lint before opening a PR** — run `npm run lint` locally and ensure zero errors before opening a PR. A PR that introduces lint errors must not be merged. Fix every error; never suppress rules with `// eslint-disable` comments unless the suppression comes with a comment explaining why it is a legitimate false positive.
+
+4. **Open a pull request** — when ready for review (or earlier, as a draft), open a PR against `master`. The PR description must include:
    - What the change does and why
    - How to test it manually
    - Any risks or follow-ups
 
-4. **Address review comments** — push additional commits in response to feedback. The PR updates automatically. Do not force-push a branch that has an open PR unless explicitly asked.
+5. **Address review comments** — push additional commits in response to feedback. The PR updates automatically. Do not force-push a branch that has an open PR unless explicitly asked.
 
-5. **Merge** — merge only after approval. Resolve any conflicts before merging. Prefer a merge commit (not squash or rebase) unless the project convention says otherwise.
+6. **Merge** — merge only after approval. Resolve any conflicts before merging. Prefer a merge commit (not squash or rebase) unless the project convention says otherwise.
 
-6. **Delete the branch** — delete the branch after merging to keep the remote clean.
+7. **Delete the branch** — delete the branch after merging to keep the remote clean.
 
 ### Agent rules
 
