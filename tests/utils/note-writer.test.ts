@@ -127,6 +127,68 @@ describe("buildTranscriptNote", () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildTranscriptNote — speaker rendering
+// ---------------------------------------------------------------------------
+
+const twoSpeakerResponse: TranscribeResponse = {
+	duration_seconds: 20,
+	segments: [
+		{ start: 0.0, end: 4.0, speaker: "Speaker 1", text: "Hello, how are you?" },
+		{ start: 4.5, end: 9.0, speaker: "Speaker 2", text: "I am doing well, thanks." },
+		{ start: 9.5, end: 14.0, speaker: "Speaker 1", text: "Great to hear." },
+		{ start: 14.5, end: 19.0, speaker: "Speaker 2", text: "Let us get started." },
+	],
+};
+
+describe("buildTranscriptNote — speaker rendering", () => {
+	it("groups consecutive segments under a speaker header", () => {
+		const note = buildTranscriptNote(twoSpeakerResponse, "rec.wav");
+		expect(note).toContain("**Speaker 1**");
+		expect(note).toContain("**Speaker 2**");
+	});
+
+	it("places each segment line under its speaker block", () => {
+		const note = buildTranscriptNote(twoSpeakerResponse, "rec.wav");
+		// Speaker 1 block contains first segment
+		const s1Block = note.indexOf("**Speaker 1**");
+		const s2Block = note.indexOf("**Speaker 2**");
+		expect(s1Block).toBeLessThan(note.indexOf("[00:00] Hello, how are you?"));
+		expect(s2Block).toBeLessThan(note.indexOf("[00:04] I am doing well, thanks."));
+	});
+
+	it("merges consecutive same-speaker segments into one block", () => {
+		const response: TranscribeResponse = {
+			duration_seconds: 10,
+			segments: [
+				{ start: 0, end: 3, speaker: "Speaker 1", text: "First." },
+				{ start: 3, end: 6, speaker: "Speaker 1", text: "Second." },
+				{ start: 6, end: 9, speaker: "Speaker 2", text: "Third." },
+			],
+		};
+		const note = buildTranscriptNote(response, "rec.wav");
+		// Speaker 1 header appears exactly once
+		const occurrences = note.split("**Speaker 1**").length - 1;
+		expect(occurrences).toBe(1);
+	});
+
+	it("includes speaker list in frontmatter when speakers are present", () => {
+		const note = buildTranscriptNote(twoSpeakerResponse, "rec.wav");
+		expect(note).toMatch(/speakers: "Speaker 1, Speaker 2"/);
+	});
+
+	it("omits speakers frontmatter field when all speakers are empty", () => {
+		const note = buildTranscriptNote(sampleResponse, "rec.wav");
+		expect(note).not.toContain("speakers:");
+	});
+
+	it("falls back to flat format when all speakers are empty", () => {
+		const note = buildTranscriptNote(sampleResponse, "rec.wav");
+		expect(note).not.toContain("**Speaker");
+		expect(note).toContain("[00:00] Hello, how are you?");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // writeTranscriptNote
 // ---------------------------------------------------------------------------
 

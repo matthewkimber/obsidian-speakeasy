@@ -97,7 +97,8 @@ async function transcribeAndWrite(
 		const response = await transcribeAudio(
 			plugin.settings.backendUrl,
 			wav,
-			plugin.settings.whisperModel
+			plugin.settings.whisperModel,
+			plugin.settings.numSpeakers
 		);
 		const notePath = await writeTranscriptNote(plugin, response, audioFilePath);
 		plugin.statusIndicator?.clear();

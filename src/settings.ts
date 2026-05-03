@@ -10,6 +10,7 @@ export interface SpeakeasySettings {
 	ollamaBaseUrl: string;
 	ollamaModel: string;
 	microphoneDeviceId: string;
+	numSpeakers: number;
 	audioOutputFolder: string;
 	noteOutputFolder: string;
 	defaultTemplate: string;
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS: SpeakeasySettings = {
 	ollamaBaseUrl: "http://localhost:11434",
 	ollamaModel: "llama3",
 	microphoneDeviceId: "",
+	numSpeakers: 0,
 	audioOutputFolder: "Recordings",
 	noteOutputFolder: "Transcripts",
 	defaultTemplate: "Meeting Notes",
@@ -150,6 +152,22 @@ export class SpeakeasySettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 				this.populateMicDevices(drop);
+			});
+
+		new Setting(containerEl)
+			.setName("Number of speakers")
+			.setDesc(
+				"Hint for speaker diarization. Set to 0 to auto-detect. Requires Pyannote backend setup."
+			)
+			.addDropdown((drop) => {
+				drop.addOption("0", "Auto-detect");
+				for (let i = 1; i <= 6; i++) drop.addOption(String(i), String(i));
+				drop
+					.setValue(String(this.plugin.settings.numSpeakers))
+					.onChange(async (value) => {
+						this.plugin.settings.numSpeakers = parseInt(value, 10);
+						await this.plugin.saveSettings();
+					});
 			});
 	}
 
