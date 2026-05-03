@@ -75,7 +75,7 @@ export class AudioRecorder {
 				resolve(blob);
 			};
 
-			this.mediaRecorder.onerror = (e) => reject(e);
+			this.mediaRecorder.onerror = () => reject(new Error("MediaRecorder error"));
 			this.mediaRecorder.stop();
 		});
 	}

@@ -43,8 +43,6 @@ export class SpeakeasySettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Speakeasy settings" });
-
 		this.renderBackendSection(containerEl);
 		this.renderOllamaSection(containerEl);
 		this.renderAudioSection(containerEl);
@@ -112,7 +110,7 @@ export class SpeakeasySettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Ollama model")
-			.setDesc("Model name to use for annotation (e.g. llama3, mistral).")
+			.setDesc("Model name to use for annotation (llama3, mistral, etc.).")
 			.addText((text) =>
 				text
 					.setPlaceholder("llama3")
@@ -189,7 +187,7 @@ export class SpeakeasySettingTab extends PluginSettingTab {
 			.setDesc("Template used when starting a new recording.")
 			.addText((text) =>
 				text
-					.setPlaceholder("Meeting Notes")
+					.setPlaceholder("Meeting notes")
 					.setValue(this.plugin.settings.defaultTemplate)
 					.onChange(async (value) => {
 						this.plugin.settings.defaultTemplate = value;

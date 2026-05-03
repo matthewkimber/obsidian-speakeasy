@@ -112,6 +112,7 @@ describe("AudioRecorder", () => {
 		await recorder.startRecording("device-abc");
 		expect(spy).toHaveBeenCalledWith(
 			expect.objectContaining({
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				audio: expect.objectContaining({ deviceId: "device-abc" }),
 			})
 		);

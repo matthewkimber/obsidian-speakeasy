@@ -142,3 +142,11 @@ export class WorkspaceLeaf {}
 export function normalizePath(path: string): string {
 	return path.replace(/\\/g, "/");
 }
+
+export const requestUrl = vi.fn().mockResolvedValue({
+	status: 200,
+	json: {},
+	text: "",
+	headers: {},
+	arrayBuffer: new ArrayBuffer(0),
+});

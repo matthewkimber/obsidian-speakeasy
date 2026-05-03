@@ -24,9 +24,9 @@ export function registerRecordingCommands(plugin: SpeakeasyPlugin): void {
 export function addRecordingRibbonIcon(plugin: SpeakeasyPlugin): HTMLElement {
 	return plugin.addRibbonIcon(RIBBON_ICON_IDLE, "Speakeasy: start recording", () => {
 		if (plugin.recorder.isRecording) {
-			stopRecording(plugin);
+			void stopRecording(plugin);
 		} else {
-			startRecording(plugin);
+			void startRecording(plugin);
 		}
 	});
 }
@@ -59,7 +59,7 @@ async function stopRecording(plugin: SpeakeasyPlugin): Promise<void> {
 
 		const { wav, filePath } = await saveRecording(plugin, blob);
 		// Fire-and-forget — transcription is async and non-blocking
-		transcribeAndWrite(plugin, wav, filePath);
+		void transcribeAndWrite(plugin, wav, filePath);
 	} catch (err) {
 		new Notice("Failed to stop recording. Check the console for details.");
 		console.error("[Speakeasy] stopRecording error:", err);
