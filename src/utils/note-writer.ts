@@ -98,6 +98,7 @@ export async function writeTranscriptNote(
 	audioPath: string,
 	template?: ParsedTemplate,
 	title?: string,
+	annotations?: Map<string, string>,
 ): Promise<string> {
 	const folder = normalizePath(plugin.settings.noteOutputFolder);
 	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -112,7 +113,7 @@ export async function writeTranscriptNote(
 
 	let content: string;
 	if (template) {
-		content = buildTemplatedNote(response, audioPath, template, title ?? "");
+		content = buildTemplatedNote(response, audioPath, template, title ?? "", annotations);
 	} else {
 		content = buildTranscriptNote(response, audioPath);
 	}
@@ -126,6 +127,7 @@ function buildTemplatedNote(
 	audioPath: string,
 	template: ParsedTemplate,
 	title: string,
+	annotations?: Map<string, string>,
 ): string {
 	const date = new Date().toISOString().slice(0, 10);
 	const duration = formatDuration(response.duration_seconds);
@@ -152,5 +154,5 @@ function buildTemplatedNote(
 		audio_path: audioPath,
 	};
 
-	return frontmatterLines.join("\n") + "\n\n" + renderTemplate(template, vars);
+	return frontmatterLines.join("\n") + "\n\n" + renderTemplate(template, vars, annotations);
 }

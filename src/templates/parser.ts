@@ -1,7 +1,12 @@
 import type { ParsedTemplate, TemplateVars } from "../types";
 
-const LLM_BLOCK_RE = /\{\{llm:[^}]+\}\}[\s\S]*?\{\{\/llm\}\}/g;
+const LLM_BLOCK_RE = /\{\{llm:([^}]+)\}\}([\s\S]*?)\{\{\/llm\}\}/g;
 const LLM_PENDING = "_LLM annotation pending._";
+
+export interface LlmBlock {
+	key: string;
+	prompt: string;
+}
 
 export function parseTemplate(content: string): ParsedTemplate {
 	const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -28,8 +33,39 @@ export function parseTemplate(content: string): ParsedTemplate {
 	};
 }
 
-export function renderTemplate(template: ParsedTemplate, vars: TemplateVars): string {
-	let output = template.body.replace(LLM_BLOCK_RE, LLM_PENDING);
+export function extractLlmBlocks(body: string): LlmBlock[] {
+	const blocks: LlmBlock[] = [];
+	let match: RegExpExecArray | null;
+	const re = new RegExp(LLM_BLOCK_RE.source, "g");
+	while ((match = re.exec(body)) !== null) {
+		const key = match[1]?.trim() ?? "";
+		const prompt = match[2]?.trim() ?? "";
+		if (key) blocks.push({ key, prompt });
+	}
+	return blocks;
+}
+
+export function renderTemplate(
+	template: ParsedTemplate,
+	vars: TemplateVars,
+	annotations?: Map<string, string>,
+): string {
+	let output = template.body;
+
+	if (annotations) {
+		for (const block of extractLlmBlocks(template.body)) {
+			const replacement = annotations.get(block.key) ?? LLM_PENDING;
+			output = output.replace(
+				new RegExp(
+					`\\{\\{llm:${escapeRegex(block.key)}\\}\\}[\\s\\S]*?\\{\\{/llm\\}\\}`,
+				),
+				replacement,
+			);
+		}
+	} else {
+		output = output.replace(new RegExp(LLM_BLOCK_RE.source, "g"), LLM_PENDING);
+	}
+
 	for (const [key, value] of Object.entries(vars) as [string, string][]) {
 		output = output.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
 	}
@@ -38,4 +74,8 @@ export function renderTemplate(template: ParsedTemplate, vars: TemplateVars): st
 
 function toSlug(name: string): string {
 	return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

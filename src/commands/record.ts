@@ -3,8 +3,10 @@ import type SpeakeasyPlugin from "../main";
 import { MicPermissionError, NoMicrophoneError, AlreadyRecordingError } from "../audio/recorder";
 import { encodeWav } from "../audio/converter";
 import { transcribeAudio, BackendUnreachableError } from "../utils/api";
-import { writeTranscriptNote } from "../utils/note-writer";
+import { writeTranscriptNote, buildTranscriptText } from "../utils/note-writer";
 import { loadAvailableTemplates } from "../templates/loader";
+import { extractLlmBlocks } from "../templates/parser";
+import { runAnnotations } from "../templates/annotator";
 import { TemplateSelectionModal } from "../ui/template-modal";
 import type { ParsedTemplate } from "../types";
 
@@ -47,7 +49,8 @@ async function openTemplateModal(plugin: SpeakeasyPlugin): Promise<void> {
 		plugin.app,
 		templates,
 		plugin.settings.defaultTemplate,
-		(template, title) => void startRecording(plugin, template, title),
+		plugin.settings.ollamaEnabled,
+		(template, title, skipOllama) => void startRecording(plugin, template, title, skipOllama),
 	).open();
 }
 
@@ -55,9 +58,11 @@ async function startRecording(
 	plugin: SpeakeasyPlugin,
 	template: ParsedTemplate,
 	title: string,
+	skipOllama: boolean,
 ): Promise<void> {
 	plugin.activeTemplate = template;
 	plugin.activeTitle = title || formatDefaultTitle();
+	plugin.activeSkipOllama = skipOllama;
 	try {
 		const deviceId = plugin.settings.microphoneDeviceId || undefined;
 		await plugin.recorder.startRecording(deviceId);
@@ -66,6 +71,7 @@ async function startRecording(
 	} catch (err) {
 		plugin.activeTemplate = null;
 		plugin.activeTitle = "";
+		plugin.activeSkipOllama = false;
 		if (err instanceof MicPermissionError) {
 			new Notice("Microphone access denied. Enable mic in system settings.");
 		} else if (err instanceof NoMicrophoneError) {
@@ -88,10 +94,12 @@ async function stopRecording(plugin: SpeakeasyPlugin): Promise<void> {
 		const { wav, filePath } = await saveRecording(plugin, blob);
 		const template = plugin.activeTemplate;
 		const title = plugin.activeTitle;
+		const skipOllama = plugin.activeSkipOllama;
 		plugin.activeTemplate = null;
 		plugin.activeTitle = "";
-		// Fire-and-forget — transcription is async and non-blocking
-		void transcribeAndWrite(plugin, wav, filePath, template ?? undefined, title);
+		plugin.activeSkipOllama = false;
+		// Fire-and-forget — transcription + annotation is async and non-blocking
+		void transcribeAndWrite(plugin, wav, filePath, template ?? undefined, title, skipOllama);
 	} catch (err) {
 		new Notice("Failed to stop recording. Check the console for details.");
 		console.error("[Speakeasy] stopRecording error:", err);
@@ -125,6 +133,7 @@ async function transcribeAndWrite(
 	audioFilePath: string,
 	template: ParsedTemplate | undefined,
 	title: string,
+	skipOllama: boolean,
 ): Promise<void> {
 	plugin.statusIndicator?.setProcessing("⏳ Transcribing…");
 	try {
@@ -134,7 +143,44 @@ async function transcribeAndWrite(
 			plugin.settings.whisperModel,
 			plugin.settings.numSpeakers,
 		);
-		const notePath = await writeTranscriptNote(plugin, response, audioFilePath, template, title);
+
+		let annotations: Map<string, string> | undefined;
+		if (
+			template &&
+			plugin.settings.ollamaEnabled &&
+			!skipOllama &&
+			extractLlmBlocks(template.body).length > 0
+		) {
+			plugin.statusIndicator?.setProcessing("⏳ Annotating…");
+			const transcript = buildTranscriptText(response);
+			const { annotations: ann, error } = await runAnnotations(
+				template,
+				transcript,
+				{ baseUrl: plugin.settings.ollamaBaseUrl, model: plugin.settings.ollamaModel },
+				(idx, total) =>
+					plugin.statusIndicator?.setProcessing(`⏳ Annotating (${idx}/${total})…`),
+			);
+			annotations = ann;
+
+			if (error?.type === "unreachable") {
+				new Notice(
+					"Ollama unreachable — annotation skipped. Check that Ollama is running.",
+				);
+			} else if (error?.type === "model_not_found") {
+				new Notice(
+					`Ollama model "${error.model}" not found. Run: ollama pull ${error.model}`,
+				);
+			}
+		}
+
+		const notePath = await writeTranscriptNote(
+			plugin,
+			response,
+			audioFilePath,
+			template,
+			title,
+			annotations,
+		);
 		plugin.statusIndicator?.clear();
 		new Notice(`Transcript ready: ${notePath}`);
 	} catch (err) {

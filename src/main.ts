@@ -12,6 +12,7 @@ export default class SpeakeasyPlugin extends Plugin {
 	ribbonIcon: HTMLElement | null = null;
 	activeTemplate: ParsedTemplate | null = null;
 	activeTitle = "";
+	activeSkipOllama = false;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
