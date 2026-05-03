@@ -1,90 +1,183 @@
-# Obsidian Sample Plugin
+# Speakeasy
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+An Obsidian plugin that records conversations, transcribes them with [Whisper](https://github.com/openai/whisper), and writes structured transcript notes directly into your vault — all locally, with no data leaving your machine.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+**Features:**
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+- One-click recording from a ribbon icon or command palette
+- Timestamped transcripts with `[MM:SS] text` formatting
+- Speaker diarization — consecutive segments are grouped under `**Speaker 1**`, `**Speaker 2**`, etc.
+- YAML frontmatter on every note: `date`, `duration`, `audio` path, and `speakers` list
+- Configurable Whisper model size, microphone device, and output folders
+- Status bar indicator and non-blocking async transcription
 
-## First time developing plugins?
+> **Desktop only.** Requires a running [local backend](#backend-setup) for transcription.
 
-Quick starting guide for new plugin devs:
+---
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+## How it works
 
-## Releasing new releases
-
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
-
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+```
+Obsidian plugin  →  POST /transcribe  →  Backend
+                                          ├── Whisper (speech-to-text)
+                                          └── Pyannote (speaker diarization, optional)
+                    ←  JSON segments  ←
+                    writes .md note to vault
 ```
 
-If you have multiple URLs, you can also do:
+The plugin talks to a small FastAPI server (`backend/`) that runs on `localhost:8765`. The server does the heavy lifting: it runs Whisper for transcription and, if a Hugging Face token is configured, runs Pyannote for speaker diarization.
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+---
+
+## Backend setup
+
+**Prerequisites:** Python 3.11+, [uv](https://github.com/astral-sh/uv)
+
+```bash
+cd backend
+
+# Create venv and install dependencies
+uv venv
+source .venv/bin/activate        # macOS/Linux
+# .venv\Scripts\activate         # Windows
+
+uv pip install -r requirements.txt
+
+# Optional: speaker diarization requires a Hugging Face token.
+# Accept the pyannote/speaker-diarization-3.1 model terms on huggingface.co first.
+cp .env.example .env
+# Edit .env and set HUGGINGFACE_TOKEN=hf_...
 ```
 
-## API Documentation
+**Start the server:**
 
-See https://docs.obsidian.md
+```bash
+uvicorn main:app --host 127.0.0.1 --port 8765 --reload
+```
+
+The API is now available at `http://localhost:8765`. Visit `/health` to verify it's running and see which Whisper models are cached.
+
+**First transcription** triggers a one-time model download from OpenAI (size depends on the model you select in settings — `base` is ~140 MB).
+
+---
+
+## Plugin setup (using the plugin)
+
+1. Build the plugin: `npm run build` (produces `main.js`)
+2. Copy `main.js`, `manifest.json`, and `styles.css` into your vault at `.obsidian/plugins/obsidian-speakeasy/`
+3. Enable the plugin in Obsidian → Settings → Community plugins
+
+Or symlink this repo directory directly into `.obsidian/plugins/obsidian-speakeasy/` and run `npm run dev` for live reloading during development.
+
+---
+
+## Contributing
+
+### Prerequisites
+
+- Node.js 20+
+- Python 3.11+ (for backend work)
+- [uv](https://github.com/astral-sh/uv) (for backend dependency management)
+
+### Plugin
+
+```bash
+npm install          # install dependencies
+npm run dev          # watch mode — rebuilds main.js on save
+npm run build        # type-check + production build
+npm test             # run Vitest unit tests
+npm run test:watch   # test watch mode
+npm run lint         # ESLint (must pass before opening a PR)
+```
+
+All commands run from the repo root.
+
+### Backend
+
+```bash
+cd backend
+source .venv/bin/activate       # activate the venv you created above
+uvicorn main:app --reload       # start the dev server
+
+pytest                          # run unit tests (no live backend needed)
+pytest -m "not e2e"             # skip tests that require a running server
+```
+
+### Project structure
+
+```
+backend/                  FastAPI transcription server
+  main.py                 Routes and request/response models
+  transcribe.py           Whisper transcription (run_whisper)
+  diarize.py              Pyannote diarization (run_pyannote)
+  merge.py                Assigns Whisper segments to Pyannote speakers
+  tests/                  Backend unit tests
+
+src/                      Obsidian plugin (TypeScript)
+  main.ts                 Plugin entry point
+  settings.ts             Settings interface and tab UI
+  types.ts                Shared TypeScript types
+  audio/
+    recorder.ts           MediaRecorder wrapper
+    converter.ts          PCM → WAV encoding
+  commands/
+    index.ts              Command registration entry point
+    record.ts             Start/stop recording, transcription orchestration
+  ui/
+    status.ts             Status bar indicator
+  utils/
+    api.ts                Backend HTTP calls (requestUrl)
+    note-writer.ts        Transcript note formatting and vault writes
+
+tests/                    Vitest unit tests (mirrors src/ structure)
+__mocks__/obsidian.ts     Obsidian API mock for tests
+specs/                    Phase specs and design documents
+```
+
+### Running tests
+
+The plugin test suite uses Vitest with a jsdom environment. Tests mock the Obsidian API — no live Obsidian instance is needed.
+
+```bash
+npm test                  # single run
+npm run test:watch        # interactive watch mode
+npm run test:coverage     # with V8 coverage report
+```
+
+### Lint
+
+The project uses ESLint with [`eslint-plugin-obsidianmd`](https://github.com/obsidianmd/eslint-plugin) for Obsidian-specific rules. Lint must pass before a PR is opened.
+
+```bash
+npm run lint
+```
+
+### CI
+
+GitHub Actions runs `npm install → npm run build → npm test → npm run lint` on every push and PR, against Node 20 and 22.
+
+---
+
+## API reference
+
+The backend exposes three endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Returns `{"status": "ok", "models": [...]}` |
+| `GET` | `/models` | Lists Whisper models cached on disk |
+| `POST` | `/transcribe` | Transcribe a WAV file |
+
+**POST /transcribe** form fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `audio` | file | required | WAV file (16 kHz mono recommended) |
+| `whisper_model` | string | `base` | `tiny` / `base` / `small` / `medium` / `large` |
+| `num_speakers` | int | `null` | Speaker count hint for diarization |
+
+---
+
+## Privacy
+
+All audio processing is local. No audio, transcripts, or personal data are sent to any external service. The only outbound network calls are one-time model downloads (Whisper from OpenAI CDN, Pyannote from Hugging Face) gated by your own credentials.
