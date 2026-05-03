@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-import os
 import glob
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from diarize import PyannoteTokenMissingError, run_pyannote
+from merge import merge_segments
 from transcribe import AudioTooShortError, WhisperModelNotFoundError, run_whisper
 
-app = FastAPI(title="Speakeasy backend", version="0.2.0")
+app = FastAPI(title="Speakeasy backend", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,25 +71,41 @@ async def models() -> list[str]:
 async def transcribe(
     audio: UploadFile = File(...),
     whisper_model: str = Form("base"),
-    num_speakers: int | None = Form(None),  # noqa: ARG001 — used in Phase 3 (Pyannote)
+    num_speakers: int | None = Form(None),
 ) -> TranscribeResponse:
     audio_bytes = await audio.read()
 
+    # --- Whisper transcription ---
     try:
-        result = run_whisper(audio_bytes, whisper_model)
+        whisper_result = run_whisper(audio_bytes, whisper_model)
     except WhisperModelNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AudioTooShortError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # --- Pyannote diarization (graceful degradation) ---
+    # Skip silently if HUGGINGFACE_TOKEN is absent; segments get empty speakers.
+    pyannote_turns: list[dict] = []
+    hf_token = os.environ.get("HUGGINGFACE_TOKEN")
+    if hf_token:
+        try:
+            pyannote_turns = run_pyannote(audio_bytes, num_speakers)
+        except PyannoteTokenMissingError:
+            pass  # already checked above, but guard against race
+        except Exception:
+            pass  # diarization failure is non-fatal
+
+    # --- Merge ---
+    merged = merge_segments(whisper_result["segments"], pyannote_turns)
+
     segments = [
         TranscriptSegment(
             start=seg["start"],
             end=seg["end"],
-            speaker="",  # speaker diarization added in Phase 3
+            speaker=seg["speaker"],
             text=seg["text"],
         )
-        for seg in result["segments"]
+        for seg in merged
     ]
 
-    return TranscribeResponse(duration_seconds=result["duration"], segments=segments)
+    return TranscribeResponse(duration_seconds=whisper_result["duration"], segments=segments)

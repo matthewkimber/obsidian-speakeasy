@@ -24,10 +24,11 @@ export async function checkHealth(baseUrl: string): Promise<HealthResponse> {
 export async function transcribeAudio(
 	baseUrl: string,
 	wav: ArrayBuffer,
-	model: string
+	model: string,
+	numSpeakers = 0
 ): Promise<TranscribeResponse> {
 	const boundary = `speakeasy${Date.now()}`;
-	const body = buildMultipartBody(wav, model, boundary);
+	const body = buildMultipartBody(wav, model, boundary, numSpeakers);
 
 	let response;
 	try {
@@ -46,19 +47,36 @@ export async function transcribeAudio(
 	return response.json as TranscribeResponse;
 }
 
-function buildMultipartBody(wav: ArrayBuffer, model: string, boundary: string): ArrayBuffer {
+function buildMultipartBody(
+	wav: ArrayBuffer,
+	model: string,
+	boundary: string,
+	numSpeakers: number
+): ArrayBuffer {
 	const enc = new TextEncoder();
 	const modelPart = enc.encode(
 		`--${boundary}\r\nContent-Disposition: form-data; name="whisper_model"\r\n\r\n${model}\r\n`
 	);
+	const speakersPart =
+		numSpeakers > 0
+			? enc.encode(
+					`--${boundary}\r\nContent-Disposition: form-data; name="num_speakers"\r\n\r\n${numSpeakers}\r\n`
+			  )
+			: new Uint8Array(0);
 	const audioHeader = enc.encode(
 		`--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="recording.wav"\r\nContent-Type: audio/wav\r\n\r\n`
 	);
 	const ending = enc.encode(`\r\n--${boundary}--\r\n`);
-	const total = modelPart.byteLength + audioHeader.byteLength + wav.byteLength + ending.byteLength;
+	const total =
+		modelPart.byteLength +
+		speakersPart.byteLength +
+		audioHeader.byteLength +
+		wav.byteLength +
+		ending.byteLength;
 	const buf = new Uint8Array(total);
 	let offset = 0;
 	buf.set(modelPart, offset); offset += modelPart.byteLength;
+	buf.set(speakersPart, offset); offset += speakersPart.byteLength;
 	buf.set(audioHeader, offset); offset += audioHeader.byteLength;
 	buf.set(new Uint8Array(wav), offset); offset += wav.byteLength;
 	buf.set(ending, offset);

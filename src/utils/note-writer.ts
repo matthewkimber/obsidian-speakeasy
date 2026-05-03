@@ -1,6 +1,6 @@
 import { normalizePath } from "obsidian";
 import type SpeakeasyPlugin from "../main";
-import type { TranscribeResponse } from "../types";
+import type { TranscribeResponse, TranscriptSegment } from "../types";
 
 export function formatTimestamp(seconds: number): string {
 	const total = Math.floor(seconds);
@@ -24,20 +24,28 @@ export function formatDuration(seconds: number): string {
 export function buildTranscriptNote(response: TranscribeResponse, audioPath: string): string {
 	const date = new Date().toISOString().slice(0, 10);
 	const duration = formatDuration(response.duration_seconds);
+	const hasSpeakers = response.segments.some((s) => s.speaker.trim() !== "");
 
-	const frontmatter = [
+	const frontmatterLines = [
 		"---",
 		`date: ${date}`,
 		`duration: "${duration}"`,
 		`audio: "${audioPath}"`,
-		"---",
-	].join("\n");
+	];
+	if (hasSpeakers) {
+		const speakerList = uniqueSpeakers(response.segments).join(", ");
+		frontmatterLines.push(`speakers: "${speakerList}"`);
+	}
+	frontmatterLines.push("---");
+	const frontmatter = frontmatterLines.join("\n");
 
 	const heading = "\n## Transcript\n";
 
 	let body: string;
 	if (response.segments.length === 0) {
 		body = "\n(no speech detected)\n";
+	} else if (hasSpeakers) {
+		body = "\n" + buildSpeakerGroups(response.segments) + "\n";
 	} else {
 		body =
 			"\n" +
@@ -48,6 +56,34 @@ export function buildTranscriptNote(response: TranscribeResponse, audioPath: str
 	}
 
 	return frontmatter + "\n" + heading + body;
+}
+
+function uniqueSpeakers(segments: TranscriptSegment[]): string[] {
+	const seen = new Set<string>();
+	const ordered: string[] = [];
+	for (const seg of segments) {
+		if (seg.speaker && !seen.has(seg.speaker)) {
+			seen.add(seg.speaker);
+			ordered.push(seg.speaker);
+		}
+	}
+	return ordered;
+}
+
+function buildSpeakerGroups(segments: TranscriptSegment[]): string {
+	const groups: Array<{ speaker: string; lines: string[] }> = [];
+	for (const seg of segments) {
+		const last = groups[groups.length - 1];
+		const line = `[${formatTimestamp(seg.start)}] ${seg.text.trim()}`;
+		if (last && last.speaker === seg.speaker) {
+			last.lines.push(line);
+		} else {
+			groups.push({ speaker: seg.speaker || "Unknown", lines: [line] });
+		}
+	}
+	return groups
+		.map((g) => `**${g.speaker}**\n${g.lines.join("\n")}`)
+		.join("\n\n");
 }
 
 export async function writeTranscriptNote(
