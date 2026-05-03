@@ -4,6 +4,9 @@ import { MicPermissionError, NoMicrophoneError, AlreadyRecordingError } from "..
 import { encodeWav } from "../audio/converter";
 import { transcribeAudio, BackendUnreachableError } from "../utils/api";
 import { writeTranscriptNote } from "../utils/note-writer";
+import { loadAvailableTemplates } from "../templates/loader";
+import { TemplateSelectionModal } from "../ui/template-modal";
+import type { ParsedTemplate } from "../types";
 
 const RIBBON_ICON_IDLE = "mic";
 
@@ -11,13 +14,13 @@ export function registerRecordingCommands(plugin: SpeakeasyPlugin): void {
 	plugin.addCommand({
 		id: "speakeasy-start-recording",
 		name: "Start recording",
-		callback: () => startRecording(plugin),
+		callback: () => void openTemplateModal(plugin),
 	});
 
 	plugin.addCommand({
 		id: "speakeasy-stop-recording",
 		name: "Stop recording",
-		callback: () => stopRecording(plugin),
+		callback: () => void stopRecording(plugin),
 	});
 }
 
@@ -26,18 +29,43 @@ export function addRecordingRibbonIcon(plugin: SpeakeasyPlugin): HTMLElement {
 		if (plugin.recorder.isRecording) {
 			void stopRecording(plugin);
 		} else {
-			void startRecording(plugin);
+			void openTemplateModal(plugin);
 		}
 	});
 }
 
-async function startRecording(plugin: SpeakeasyPlugin): Promise<void> {
+async function openTemplateModal(plugin: SpeakeasyPlugin): Promise<void> {
+	let templates: ParsedTemplate[];
+	try {
+		templates = await loadAvailableTemplates(plugin);
+	} catch {
+		new Notice("Failed to load templates. Check the console for details.");
+		return;
+	}
+
+	new TemplateSelectionModal(
+		plugin.app,
+		templates,
+		plugin.settings.defaultTemplate,
+		(template, title) => void startRecording(plugin, template, title),
+	).open();
+}
+
+async function startRecording(
+	plugin: SpeakeasyPlugin,
+	template: ParsedTemplate,
+	title: string,
+): Promise<void> {
+	plugin.activeTemplate = template;
+	plugin.activeTitle = title || formatDefaultTitle();
 	try {
 		const deviceId = plugin.settings.microphoneDeviceId || undefined;
 		await plugin.recorder.startRecording(deviceId);
 		plugin.statusIndicator?.setRecording(true);
 		plugin.ribbonIcon?.setAttribute("aria-label", "Speakeasy: stop recording");
 	} catch (err) {
+		plugin.activeTemplate = null;
+		plugin.activeTitle = "";
 		if (err instanceof MicPermissionError) {
 			new Notice("Microphone access denied. Enable mic in system settings.");
 		} else if (err instanceof NoMicrophoneError) {
@@ -58,8 +86,12 @@ async function stopRecording(plugin: SpeakeasyPlugin): Promise<void> {
 		plugin.ribbonIcon?.setAttribute("aria-label", "Speakeasy: start recording");
 
 		const { wav, filePath } = await saveRecording(plugin, blob);
+		const template = plugin.activeTemplate;
+		const title = plugin.activeTitle;
+		plugin.activeTemplate = null;
+		plugin.activeTitle = "";
 		// Fire-and-forget — transcription is async and non-blocking
-		void transcribeAndWrite(plugin, wav, filePath);
+		void transcribeAndWrite(plugin, wav, filePath, template ?? undefined, title);
 	} catch (err) {
 		new Notice("Failed to stop recording. Check the console for details.");
 		console.error("[Speakeasy] stopRecording error:", err);
@@ -68,7 +100,7 @@ async function stopRecording(plugin: SpeakeasyPlugin): Promise<void> {
 
 async function saveRecording(
 	plugin: SpeakeasyPlugin,
-	blob: Blob
+	blob: Blob,
 ): Promise<{ wav: ArrayBuffer; filePath: string }> {
 	const arrayBuffer = await blob.arrayBuffer();
 	const audioContext = new AudioContext();
@@ -90,7 +122,9 @@ async function saveRecording(
 async function transcribeAndWrite(
 	plugin: SpeakeasyPlugin,
 	wav: ArrayBuffer,
-	audioFilePath: string
+	audioFilePath: string,
+	template: ParsedTemplate | undefined,
+	title: string,
 ): Promise<void> {
 	plugin.statusIndicator?.setProcessing("⏳ Transcribing…");
 	try {
@@ -98,9 +132,9 @@ async function transcribeAndWrite(
 			plugin.settings.backendUrl,
 			wav,
 			plugin.settings.whisperModel,
-			plugin.settings.numSpeakers
+			plugin.settings.numSpeakers,
 		);
-		const notePath = await writeTranscriptNote(plugin, response, audioFilePath);
+		const notePath = await writeTranscriptNote(plugin, response, audioFilePath, template, title);
 		plugin.statusIndicator?.clear();
 		new Notice(`Transcript ready: ${notePath}`);
 	} catch (err) {
@@ -108,7 +142,9 @@ async function transcribeAndWrite(
 		if (err instanceof BackendUnreachableError) {
 			new Notice("Backend unreachable — is the Speakeasy server running?");
 		} else {
-			new Notice(`Transcription failed: ${err instanceof Error ? err.message : String(err)}`);
+			new Notice(
+				`Transcription failed: ${err instanceof Error ? err.message : String(err)}`,
+			);
 			console.error("[Speakeasy] transcribeAndWrite error:", err);
 		}
 	}
@@ -119,6 +155,14 @@ async function ensureFolder(plugin: SpeakeasyPlugin, folderPath: string): Promis
 	if (!exists) {
 		await plugin.app.vault.createFolder(folderPath);
 	}
+}
+
+function formatDefaultTitle(): string {
+	return `Recording — ${new Date().toLocaleDateString("en-GB", {
+		day: "2-digit",
+		month: "short",
+		year: "numeric",
+	})}`;
 }
 
 function isoTimestamp(): string {

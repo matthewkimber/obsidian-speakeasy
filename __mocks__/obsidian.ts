@@ -10,6 +10,8 @@ export class Vault {
 		writeBinary: vi.fn().mockResolvedValue(undefined),
 		exists: vi.fn().mockResolvedValue(false),
 		mkdir: vi.fn().mockResolvedValue(undefined),
+		list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+		read: vi.fn().mockResolvedValue(""),
 	};
 	getAbstractFileByPath = vi.fn().mockReturnValue(null);
 	createFolder = vi.fn().mockResolvedValue(undefined);
