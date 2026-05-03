@@ -13,6 +13,7 @@ export class Vault {
 	};
 	getAbstractFileByPath = vi.fn().mockReturnValue(null);
 	createFolder = vi.fn().mockResolvedValue(undefined);
+	create = vi.fn().mockResolvedValue(undefined);
 }
 
 export class Workspace {

@@ -3,7 +3,7 @@ export class StatusIndicator {
 
 	constructor(el: HTMLElement) {
 		this.el = el;
-		this.setRecording(false);
+		this.clear();
 	}
 
 	setRecording(active: boolean): void {
@@ -13,5 +13,17 @@ export class StatusIndicator {
 		} else {
 			this.el.removeClass("speakeasy-recording");
 		}
+	}
+
+	setProcessing(message: string): void {
+		this.el.setText(message);
+		this.el.removeClass("speakeasy-recording");
+		this.el.addClass("speakeasy-processing");
+	}
+
+	clear(): void {
+		this.el.setText("");
+		this.el.removeClass("speakeasy-recording");
+		this.el.removeClass("speakeasy-processing");
 	}
 }
