@@ -144,6 +144,37 @@ All unit tests must pass locally with every code change before committing.
 - E2E output is compared against a stored expected transcript fixture — flag any word error rate above 15%
 - E2E tests are opt-in and not run in standard CI; invoke explicitly with pytest -m e2e
 
+## Git workflow
+
+All code changes must follow **GitHub Flow**. Never commit directly to `master`.
+
+### Steps
+
+1. **Create a branch** — branch off `master` with a short, descriptive name (e.g. `add-whisper-transcription`, `fix-mic-permission-error`). Use kebab-case. One concern per branch.
+
+2. **Make changes** — commit early and often on your branch. Each commit should be an isolated, complete change with a descriptive message (e.g. `add WAV encoder with RIFF header`). Push regularly so work is backed up and visible.
+
+3. **Open a pull request** — when ready for review (or earlier, as a draft), open a PR against `master`. The PR description must include:
+   - What the change does and why
+   - How to test it manually
+   - Any risks or follow-ups
+
+4. **Address review comments** — push additional commits in response to feedback. The PR updates automatically. Do not force-push a branch that has an open PR unless explicitly asked.
+
+5. **Merge** — merge only after approval. Resolve any conflicts before merging. Prefer a merge commit (not squash or rebase) unless the project convention says otherwise.
+
+6. **Delete the branch** — delete the branch after merging to keep the remote clean.
+
+### Agent rules
+
+- **Never commit directly to `master`.**
+- **Never push to `master`** — all changes go through a PR.
+- **Never force-push** to a branch that has an open PR.
+- Branch names must be descriptive and kebab-case (e.g. `phase-2-whisper-integration`, not `fix`, `patch`, or `test`).
+- Each PR should be focused: one feature, one fix, or one refactor — not a mix.
+- PRs that touch the backend and the plugin should be split unless they are inseparable.
+- Link related issues in the PR body so they close automatically on merge.
+
 ## Commands & settings
 
 - Any user-facing commands should be added via `this.addCommand(...)`.
