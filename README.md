@@ -61,6 +61,89 @@ The API is now available at `http://localhost:8765`. Visit `/health` to verify i
 
 ---
 
+## Autostart the backend
+
+You'll probably want the backend to start automatically when you log in rather than running the command manually each time.
+
+### macOS — launchd
+
+Create `~/Library/LaunchAgents/com.speakeasy.backend.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.speakeasy.backend</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/path/to/obsidian-speakeasy/backend/.venv/bin/uvicorn</string>
+    <string>main:app</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>8765</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/path/to/obsidian-speakeasy/backend</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/speakeasy-backend.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/speakeasy-backend.log</string>
+</dict>
+</plist>
+```
+
+Replace `/path/to/obsidian-speakeasy` with the actual path, then load it:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.speakeasy.backend.plist
+```
+
+### Linux — systemd
+
+Create `~/.config/systemd/user/speakeasy-backend.service`:
+
+```ini
+[Unit]
+Description=Speakeasy transcription backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/obsidian-speakeasy/backend
+ExecStart=/path/to/obsidian-speakeasy/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Enable and start:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now speakeasy-backend
+```
+
+### Windows — Task Scheduler
+
+1. Open **Task Scheduler** → **Create Basic Task**
+2. Set **Trigger** → "When I log on"
+3. Set **Action** → "Start a program"
+   - Program: `C:\path\to\obsidian-speakeasy\backend\.venv\Scripts\uvicorn.exe`
+   - Arguments: `main:app --host 127.0.0.1 --port 8765`
+   - Start in: `C:\path\to\obsidian-speakeasy\backend`
+4. Check "Run only when user is logged on"
+
+Alternatively, install [NSSM](https://nssm.cc/) for more robust service management.
+
+---
+
 ## Plugin setup (using the plugin)
 
 1. Build the plugin: `npm run build` (produces `main.js`)

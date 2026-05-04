@@ -8,6 +8,20 @@ export class BackendUnreachableError extends Error {
 	}
 }
 
+export class WhisperModelNotFoundError extends Error {
+	constructor(public readonly model: string) {
+		super(`Whisper model "${model}" is not downloaded.`);
+		this.name = "WhisperModelNotFoundError";
+	}
+}
+
+export class AudioTooShortError extends Error {
+	constructor() {
+		super("Audio is too short to transcribe.");
+		this.name = "AudioTooShortError";
+	}
+}
+
 export async function checkHealth(baseUrl: string): Promise<HealthResponse> {
 	let response;
 	try {
@@ -42,6 +56,13 @@ export async function transcribeAudio(
 		throw new BackendUnreachableError(String(err));
 	}
 	if (response.status < 200 || response.status >= 300) {
+		const detail = (response.json as Record<string, unknown>)?.detail;
+		if (response.status === 404 && detail === "whisper_model_not_found") {
+			throw new WhisperModelNotFoundError(model);
+		}
+		if (response.status === 422 && detail === "audio_too_short") {
+			throw new AudioTooShortError();
+		}
 		throw new BackendUnreachableError(`HTTP ${response.status}`);
 	}
 	return response.json as TranscribeResponse;

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { checkHealth, transcribeAudio, BackendUnreachableError } from "../../src/utils/api";
+import {
+	checkHealth,
+	transcribeAudio,
+	BackendUnreachableError,
+	WhisperModelNotFoundError,
+	AudioTooShortError,
+} from "../../src/utils/api";
 import { requestUrl } from "obsidian";
 import type { HealthResponse, TranscribeResponse } from "../../src/types";
 
@@ -17,10 +23,10 @@ function mockRequestOk(body: unknown): void {
 	});
 }
 
-function mockRequestHttpError(status: number): void {
+function mockRequestHttpError(status: number, body?: unknown): void {
 	vi.mocked(requestUrl).mockResolvedValue({
 		status,
-		json: { detail: "error" },
+		json: body ?? { detail: "error" },
 		text: "",
 		headers: {},
 		arrayBuffer: new ArrayBuffer(0),
@@ -114,6 +120,34 @@ describe("transcribeAudio", () => {
 
 	it("throws BackendUnreachableError on non-2xx HTTP response", async () => {
 		mockRequestHttpError(500);
+		await expect(transcribeAudio("http://localhost:8765", mockWav, "base")).rejects.toThrow(
+			BackendUnreachableError
+		);
+	});
+
+	it("throws WhisperModelNotFoundError on 404 with whisper_model_not_found detail", async () => {
+		mockRequestHttpError(404, { detail: "whisper_model_not_found" });
+		await expect(transcribeAudio("http://localhost:8765", mockWav, "large")).rejects.toThrow(
+			WhisperModelNotFoundError
+		);
+	});
+
+	it("throws AudioTooShortError on 422 with audio_too_short detail", async () => {
+		mockRequestHttpError(422, { detail: "audio_too_short" });
+		await expect(transcribeAudio("http://localhost:8765", mockWav, "base")).rejects.toThrow(
+			AudioTooShortError
+		);
+	});
+
+	it("still throws BackendUnreachableError on generic 404", async () => {
+		mockRequestHttpError(404, { detail: "not_found" });
+		await expect(transcribeAudio("http://localhost:8765", mockWav, "base")).rejects.toThrow(
+			BackendUnreachableError
+		);
+	});
+
+	it("still throws BackendUnreachableError on generic 422", async () => {
+		mockRequestHttpError(422, { detail: "validation_error" });
 		await expect(transcribeAudio("http://localhost:8765", mockWav, "base")).rejects.toThrow(
 			BackendUnreachableError
 		);

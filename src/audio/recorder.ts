@@ -80,6 +80,15 @@ export class AudioRecorder {
 		});
 	}
 
+	abort(): void {
+		if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+			this.mediaRecorder.stop();
+		}
+		this.stream?.getTracks().forEach((t) => t.stop());
+		this.stream = null;
+		this.mediaRecorder = null;
+	}
+
 	get isRecording(): boolean {
 		return this.mediaRecorder?.state === "recording";
 	}
