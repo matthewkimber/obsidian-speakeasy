@@ -1,8 +1,8 @@
 {
-	"id": "obsidian-speakeasy",
+	"id": "speakeasy",
 	"name": "Speakeasy",
 	"version": "0.1.0",
-	"minAppVersion": "1.0.0",
+	"minAppVersion": "1.4.0",
 	"description": "Record, transcribe, diarise, and annotate conversations locally — no data leaves your machine.",
 	"author": "Matthew Kimber",
 	"isDesktopOnly": true

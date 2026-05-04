@@ -14,8 +14,13 @@ export class Vault {
 		read: vi.fn().mockResolvedValue(""),
 	};
 	getAbstractFileByPath = vi.fn().mockReturnValue(null);
+	getFolderByPath = vi.fn().mockReturnValue(null);
+	getFileByPath = vi.fn().mockReturnValue(null);
 	createFolder = vi.fn().mockResolvedValue(undefined);
 	create = vi.fn().mockResolvedValue(undefined);
+	createBinary = vi.fn().mockResolvedValue(undefined);
+	modifyBinary = vi.fn().mockResolvedValue(undefined);
+	read = vi.fn().mockResolvedValue("");
 }
 
 export class Workspace {
@@ -25,7 +30,7 @@ export class Workspace {
 
 export class Plugin {
 	app: App;
-	manifest = { id: "obsidian-speakeasy", name: "Speakeasy", version: "0.1.0" };
+	manifest = { id: "speakeasy", name: "Speakeasy", version: "0.1.0" };
 
 	constructor(app: App, manifest?: unknown) {
 		this.app = app ?? new App();
@@ -87,6 +92,10 @@ export class Setting {
 		cb(new DropdownComponent());
 		return this;
 	});
+	addButton = vi.fn().mockImplementation((cb: (c: ButtonComponent) => void) => {
+		cb(new ButtonComponent());
+		return this;
+	});
 }
 
 export class TextComponent {
@@ -107,6 +116,12 @@ export class DropdownComponent {
 	setValue = vi.fn().mockReturnThis();
 	onChange = vi.fn().mockReturnThis();
 	getValue = vi.fn().mockReturnValue("");
+}
+
+export class ButtonComponent {
+	setButtonText = vi.fn().mockReturnThis();
+	setCta = vi.fn().mockReturnThis();
+	onClick = vi.fn().mockReturnThis();
 }
 
 export class Notice {
@@ -137,6 +152,10 @@ export class MarkdownView {
 
 export class TFile {
 	constructor(public path: string, public name: string) {}
+}
+
+export class TFolder {
+	constructor(public path: string, public name: string, public children: (TFile | TFolder)[] = []) {}
 }
 
 export class WorkspaceLeaf {}

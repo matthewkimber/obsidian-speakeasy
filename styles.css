@@ -1,8 +1,5 @@
-/*
-
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
+.speakeasy-template-desc {
+	color: var(--text-muted);
+	font-style: italic;
+	margin: 0 0 var(--size-4-3);
+}

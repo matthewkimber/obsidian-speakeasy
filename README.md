@@ -147,10 +147,10 @@ Alternatively, install [NSSM](https://nssm.cc/) for more robust service manageme
 ## Plugin setup (using the plugin)
 
 1. Build the plugin: `npm run build` (produces `main.js`)
-2. Copy `main.js`, `manifest.json`, and `styles.css` into your vault at `.obsidian/plugins/obsidian-speakeasy/`
+2. Copy `main.js`, `manifest.json`, and `styles.css` into your vault at `.obsidian/plugins/speakeasy/`
 3. Enable the plugin in Obsidian → Settings → Community plugins
 
-Or symlink this repo directory directly into `.obsidian/plugins/obsidian-speakeasy/` and run `npm run dev` for live reloading during development.
+Or symlink this repo directory directly into `.obsidian/plugins/speakeasy/` and run `npm run dev` for live reloading during development.
 
 ---
 
