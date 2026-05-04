@@ -154,6 +154,21 @@ Or symlink this repo directory directly into `.obsidian/plugins/speakeasy/` and 
 
 ---
 
+## Beta testing (BRAT)
+
+Before the plugin is listed in the community directory, you can install it using [BRAT](https://github.com/TfTHacker/obsidian42-brat):
+
+1. Install BRAT from the Obsidian community plugin directory
+2. In BRAT settings, add: `matthewkimber/obsidian-speakeasy`
+3. BRAT will install the latest release (including pre-releases)
+4. Enable Speakeasy in **Settings → Community plugins**
+
+To update: open the command palette → **BRAT: Check for updates to all beta plugins and UPDATE**.
+
+> **Note:** If you install a pre-release (e.g. `0.1.0-preview.1`) via BRAT, Obsidian's built-in updater will not pick up the stable `0.1.0` release. You'll need to upgrade to `0.1.1` or higher for the automatic updater to take over, or manually trigger a BRAT update.
+
+---
+
 ## Contributing
 
 ### Prerequisites
