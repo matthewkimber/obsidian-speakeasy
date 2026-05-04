@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, SpeakeasySettingTab, type SpeakeasySettings } from "./settings";
 import { registerCommands } from "./commands/index";
 import { AudioRecorder } from "./audio/recorder";
@@ -25,9 +25,23 @@ export default class SpeakeasyPlugin extends Plugin {
 
 		this.addSettingTab(new SpeakeasySettingTab(this.app, this));
 		registerCommands(this);
+
+		if (!this.settings.hasSeenOnboarding) {
+			this.settings.hasSeenOnboarding = true;
+			await this.saveSettings();
+			new Notice(
+				"Welcome to Speakeasy! Start the local backend before recording. " +
+				"See Settings → Speakeasy for setup instructions.",
+				8000,
+			);
+		}
 	}
 
-	onunload(): void {}
+	onunload(): void {
+		if (this.recorder.isRecording) {
+			this.recorder.abort();
+		}
+	}
 
 	async loadSettings(): Promise<void> {
 		this.settings = Object.assign(

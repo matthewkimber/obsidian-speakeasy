@@ -2,7 +2,7 @@ import { Notice, normalizePath } from "obsidian";
 import type SpeakeasyPlugin from "../main";
 import { MicPermissionError, NoMicrophoneError, AlreadyRecordingError } from "../audio/recorder";
 import { encodeWav } from "../audio/converter";
-import { transcribeAudio, BackendUnreachableError } from "../utils/api";
+import { transcribeAudio, BackendUnreachableError, WhisperModelNotFoundError, AudioTooShortError } from "../utils/api";
 import { writeTranscriptNote, buildTranscriptText } from "../utils/note-writer";
 import { loadAvailableTemplates } from "../templates/loader";
 import { extractLlmBlocks } from "../templates/parser";
@@ -186,7 +186,16 @@ async function transcribeAndWrite(
 	} catch (err) {
 		plugin.statusIndicator?.clear();
 		if (err instanceof BackendUnreachableError) {
-			new Notice("Backend unreachable — is the Speakeasy server running?");
+			new Notice(
+				"Transcription backend is not running. Start it before recording.",
+			);
+		} else if (err instanceof WhisperModelNotFoundError) {
+			new Notice(
+				`Whisper model "${plugin.settings.whisperModel}" is not downloaded. ` +
+				`Run the backend once to trigger the download, or change the model in settings.`,
+			);
+		} else if (err instanceof AudioTooShortError) {
+			new Notice("Recording is too short to transcribe. Record at least a few seconds of audio.");
 		} else {
 			new Notice(
 				`Transcription failed: ${err instanceof Error ? err.message : String(err)}`,

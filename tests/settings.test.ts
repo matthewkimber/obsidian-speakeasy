@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_SETTINGS, type SpeakeasySettings } from "../src/settings";
+import { DEFAULT_SETTINGS, validateUrl, type SpeakeasySettings } from "../src/settings";
 
 describe("DEFAULT_SETTINGS", () => {
 	it("has all required keys", () => {
@@ -15,6 +15,7 @@ describe("DEFAULT_SETTINGS", () => {
 			"defaultTemplate",
 			"templateFolder",
 			"showStatusBar",
+			"hasSeenOnboarding",
 		];
 		for (const key of keys) {
 			expect(DEFAULT_SETTINGS).toHaveProperty(key);
@@ -62,5 +63,35 @@ describe("DEFAULT_SETTINGS", () => {
 	it("whiskerModel is a valid enum value", () => {
 		const valid = ["tiny", "base", "small", "medium", "large"];
 		expect(valid).toContain(DEFAULT_SETTINGS.whisperModel);
+	});
+});
+
+describe("validateUrl", () => {
+	it("accepts a valid http localhost URL", () => {
+		expect(validateUrl("http://localhost:8765")).toBe(true);
+	});
+
+	it("accepts a valid https URL", () => {
+		expect(validateUrl("https://example.com")).toBe(true);
+	});
+
+	it("rejects an empty string", () => {
+		expect(validateUrl("")).toBe(false);
+	});
+
+	it("rejects a non-URL string", () => {
+		expect(validateUrl("not-a-url")).toBe(false);
+	});
+
+	it("rejects a URL with no protocol", () => {
+		expect(validateUrl("localhost:8765")).toBe(false);
+	});
+
+	it("rejects a ftp URL (only http/https accepted)", () => {
+		expect(validateUrl("ftp://files.example.com")).toBe(false);
+	});
+
+	it("accepts a URL with a path", () => {
+		expect(validateUrl("http://localhost:8765/api")).toBe(true);
 	});
 });

@@ -1,5 +1,15 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type SpeakeasyPlugin from "./main";
+import { checkHealth, BackendUnreachableError } from "./utils/api";
+
+export function validateUrl(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "http:" || parsed.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
 
 export type WhisperModel = "tiny" | "base" | "small" | "medium" | "large";
 
@@ -16,6 +26,7 @@ export interface SpeakeasySettings {
 	defaultTemplate: string;
 	templateFolder: string;
 	showStatusBar: boolean;
+	hasSeenOnboarding: boolean;
 }
 
 export const DEFAULT_SETTINGS: SpeakeasySettings = {
@@ -31,6 +42,7 @@ export const DEFAULT_SETTINGS: SpeakeasySettings = {
 	defaultTemplate: "Meeting Notes",
 	templateFolder: "Templates/Transcription",
 	showStatusBar: true,
+	hasSeenOnboarding: false,
 };
 
 export class SpeakeasySettingTab extends PluginSettingTab {
@@ -65,6 +77,27 @@ export class SpeakeasySettingTab extends PluginSettingTab {
 						this.plugin.settings.backendUrl = value;
 						await this.plugin.saveSettings();
 					})
+			)
+			.addButton((btn) =>
+				btn.setButtonText("Test connection").onClick(async () => {
+					if (!validateUrl(this.plugin.settings.backendUrl)) {
+						new Notice("Invalid backend URL — must start with http:// or https://");
+						return;
+					}
+					try {
+						const health = await checkHealth(this.plugin.settings.backendUrl);
+						const models = health.models.length > 0
+							? `Models available: ${health.models.join(", ")}`
+							: "No Whisper models cached yet.";
+						new Notice(`Backend connected. ${models}`);
+					} catch (err) {
+						if (err instanceof BackendUnreachableError) {
+							new Notice("Backend unreachable. Is the Speakeasy server running?");
+						} else {
+							new Notice(`Connection failed: ${err instanceof Error ? err.message : String(err)}`);
+						}
+					}
+				})
 			);
 
 		new Setting(containerEl)
