@@ -1,19 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
-import { App } from "obsidian";
+import { App, TFile, TFolder } from "obsidian";
 import { loadAvailableTemplates, BUILTIN_TEMPLATE_NAMES } from "../../src/templates/loader";
 
-function makePlugin(templateFolder = "Templates/Transcription", adapterOverrides = {}) {
+function makePlugin(templateFolder = "Templates/Transcription", vaultOverrides: Record<string, unknown> = {}) {
 	const mockApp = new App();
-	// Add list and read to the adapter (not in the base mock)
-	Object.assign(mockApp.vault.adapter, {
-		list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
-		read: vi.fn().mockResolvedValue(""),
-		...adapterOverrides,
-	});
+	Object.assign(mockApp.vault, vaultOverrides);
 	return {
 		app: mockApp,
 		settings: { templateFolder },
 	} as unknown as import("../../src/main").default;
+}
+
+function makeTFolder(folderPath: string, files: Array<{ path: string; name: string; content: string }>) {
+	const children = files.map((f) => Object.assign(new TFile(), { path: f.path, name: f.name }));
+	return Object.assign(new TFolder(), {
+		path: folderPath,
+		name: folderPath.split("/").pop() ?? folderPath,
+		children,
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -82,9 +86,11 @@ describe("loadAvailableTemplates", () => {
 			"# {{title}}",
 			"{{transcript}}",
 		].join("\n");
+		const folder = makeTFolder("Templates/Transcription", [
+			{ path: "Templates/Transcription/my-custom.md", name: "my-custom.md", content: customContent },
+		]);
 		const plugin = makePlugin("Templates/Transcription", {
-			exists: vi.fn().mockResolvedValue(true),
-			list: vi.fn().mockResolvedValue({ files: ["Templates/Transcription/my-custom.md"], folders: [] }),
+			getFolderByPath: vi.fn().mockReturnValue(folder),
 			read: vi.fn().mockResolvedValue(customContent),
 		});
 		const templates = await loadAvailableTemplates(plugin);
@@ -101,39 +107,41 @@ describe("loadAvailableTemplates", () => {
 			"---",
 			"Custom body",
 		].join("\n");
+		const folder = makeTFolder("Templates/Transcription", [
+			{ path: "Templates/Transcription/meeting-notes.md", name: "meeting-notes.md", content: customMeetingNotes },
+		]);
 		const plugin = makePlugin("Templates/Transcription", {
-			exists: vi.fn().mockResolvedValue(true),
-			list: vi.fn().mockResolvedValue({ files: ["Templates/Transcription/meeting-notes.md"], folders: [] }),
+			getFolderByPath: vi.fn().mockReturnValue(folder),
 			read: vi.fn().mockResolvedValue(customMeetingNotes),
 		});
 		const templates = await loadAvailableTemplates(plugin);
 		const meetingNotes = templates.find((t) => t.name === "Meeting Notes");
 		expect(meetingNotes?.description).toBe("My custom meeting notes");
 		expect(meetingNotes?.version).toBe("2.0");
-		// Should not appear twice
 		expect(templates.filter((t) => t.name === "Meeting Notes")).toHaveLength(1);
 	});
 
 	it("skips non-.md files in the vault folder", async () => {
+		const folder = makeTFolder("Templates/Transcription", [
+			{ path: "Templates/Transcription/notes.txt", name: "notes.txt", content: "" },
+			{ path: "Templates/Transcription/image.png", name: "image.png", content: "" },
+		]);
+		const readMock = vi.fn();
 		const plugin = makePlugin("Templates/Transcription", {
-			exists: vi.fn().mockResolvedValue(true),
-			list: vi.fn().mockResolvedValue({
-				files: ["Templates/Transcription/notes.txt", "Templates/Transcription/image.png"],
-				folders: [],
-			}),
-			read: vi.fn(),
+			getFolderByPath: vi.fn().mockReturnValue(folder),
+			read: readMock,
 		});
 		const templates = await loadAvailableTemplates(plugin);
-		// read should not have been called for non-.md files
-		// eslint-disable-next-line @typescript-eslint/unbound-method
-		expect(plugin.app.vault.adapter.read).not.toHaveBeenCalled();
+		expect(readMock).not.toHaveBeenCalled();
 		expect(templates).toHaveLength(7); // only built-ins
 	});
 
 	it("skips a malformed custom template without throwing", async () => {
+		const folder = makeTFolder("Templates/Transcription", [
+			{ path: "Templates/Transcription/bad.md", name: "bad.md", content: "" },
+		]);
 		const plugin = makePlugin("Templates/Transcription", {
-			exists: vi.fn().mockResolvedValue(true),
-			list: vi.fn().mockResolvedValue({ files: ["Templates/Transcription/bad.md"], folders: [] }),
+			getFolderByPath: vi.fn().mockReturnValue(folder),
 			read: vi.fn().mockResolvedValue("no frontmatter here"),
 		});
 		const templates = await loadAvailableTemplates(plugin);
@@ -142,7 +150,7 @@ describe("loadAvailableTemplates", () => {
 
 	it("returns only built-ins when vault folder does not exist", async () => {
 		const plugin = makePlugin("Templates/Transcription", {
-			exists: vi.fn().mockResolvedValue(false),
+			getFolderByPath: vi.fn().mockReturnValue(null),
 		});
 		const templates = await loadAvailableTemplates(plugin);
 		expect(templates).toHaveLength(7);

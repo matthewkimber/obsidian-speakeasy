@@ -106,8 +106,7 @@ export async function writeTranscriptNote(
 	const filename = `${slug}-${timestamp}.md`;
 	const filePath = `${folder}/${filename}`;
 
-	const exists = await plugin.app.vault.adapter.exists(folder);
-	if (!exists) {
+	if (!plugin.app.vault.getFolderByPath(folder)) {
 		await plugin.app.vault.createFolder(folder);
 	}
 
