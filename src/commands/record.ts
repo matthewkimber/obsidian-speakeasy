@@ -14,13 +14,13 @@ const RIBBON_ICON_IDLE = "mic";
 
 export function registerRecordingCommands(plugin: SpeakeasyPlugin): void {
 	plugin.addCommand({
-		id: "speakeasy-start-recording",
+		id: "start-recording",
 		name: "Start recording",
 		callback: () => void openTemplateModal(plugin),
 	});
 
 	plugin.addCommand({
-		id: "speakeasy-stop-recording",
+		id: "stop-recording",
 		name: "Stop recording",
 		callback: () => void stopRecording(plugin),
 	});
@@ -121,7 +121,7 @@ async function saveRecording(
 	const filePath = `${folder}/${filename}`;
 
 	await ensureFolder(plugin, folder);
-	await plugin.app.vault.adapter.writeBinary(filePath, wav);
+	await plugin.app.vault.createBinary(filePath, wav);
 
 	new Notice(`Recording saved: ${filePath}`);
 	return { wav, filePath };
@@ -206,8 +206,7 @@ async function transcribeAndWrite(
 }
 
 async function ensureFolder(plugin: SpeakeasyPlugin, folderPath: string): Promise<void> {
-	const exists = await plugin.app.vault.adapter.exists(folderPath);
-	if (!exists) {
+	if (!plugin.app.vault.getFolderByPath(folderPath)) {
 		await plugin.app.vault.createFolder(folderPath);
 	}
 }
